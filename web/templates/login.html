@@ -1,0 +1,84 @@
+{% extends "layout/basic.html" %}
+{% load static %}
+{% block title %}
+    用户登录
+{% endblock %}
+
+{% block css %}
+    <link rel="stylesheet" href="{% static 'css/account.css' %}">
+{% endblock %}
+
+{% block content %}
+    <div class="account">
+        <h3>用户登录</h3>
+        <form id="regForm" method="post" novalidate>
+            {% csrf_token %}
+            {% for field in form %}
+                {% if field.name == 'code' %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <div class="row">
+                            <div class="col-xs-7">
+                                {{ field }}
+                                <span class="error-msg">{{ field.errors.0 }}</span>
+                            </div>
+                            <div class="col-xs-5"></div>
+                            <img src="{% url 'img_code' %}" id="image_code" title="点击更换图片">
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        <span class="error-msg">{{ field.errors.0 }}</span>
+                    </div>
+                {% endif %}
+            {% endfor %}
+            <div class="row">
+                <div class="col-xs-3">
+                    <input type="submit" class="btn btn-primary" value="登录">
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+
+{% block js %}
+    <script>
+        $(function () {/*点击事件*/
+            $('#image_code').click(function () {
+                $(this).attr('src',$(this).attr('src')+'?');/*给图片地址增加一个问号，图片地址改变就会自动刷新*/
+            })
+
+        });
+    </script>
+{% endblock %}
+
+
+
+
+
+
+
+
+<!--
+<script>
+
+    $(function () {
+
+    });
+    function sss() {
+        var phone = $('#id_phone').val();
+        $.ajax({
+            url:"",
+            type: 'get',
+            data: "",
+            dataType:'json',
+            success:function (res) {
+                console.log(res)
+
+            }
+
+        })
+    }
+</script>-->
