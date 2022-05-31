@@ -46,6 +46,7 @@ urlpatterns = [
 
     # 文件
     url(r'^manage/(?P<project_id>\d+)/file', file.file, name='file'),
+    url(r'^manage/(?P<project_id>\d+)/FilePost', file.FilePost, name='FilePost'),
     url(r'^manage/(?P<project_id>\d+)/FileDelete', file.FileDelete, name='FileDelete'),
     url(r'^manage/(?P<project_id>\d+)/CosCredential', file.CosCredential, name='CosCredential'),
 

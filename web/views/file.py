@@ -3,9 +3,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.forms import model_to_dict
 from utils.COS import Credential
-from web.forms.file import FileModal
+from web.forms.file import FileModal,FileModalForm
 from web import models
-
+import json
 from utils.COS import delete_file, delete_file_list
 
 
@@ -36,7 +36,8 @@ def file(request, project_id):
                 '-file_type')
         return render(request, 'file.html', {'form': form,
                                              'file_object_list': file_object_list,
-                                             'breadcrumb_list': breadcrumb_list})
+                                             'breadcrumb_list': breadcrumb_list,
+                                             'folder_object': parent_object})
 
     # POST请求添加文件 &修改文件夹
     fid = request.POST.get('fid', '')
@@ -108,9 +109,68 @@ def FileDelete(request, project_id):
     return JsonResponse({'status': True})
 
 
+@csrf_exempt
 def CosCredential(request, project_id):
     '''获取COS上传临时凭证'''
-    # 他同时做容量限制： 单文件大小&总容量
-    data_dict = Credential(request.tracer.project.bucket, request.tracer.project.region)
-    print(data_dict)
-    return JsonResponse(data_dict)
+
+    # 获取要上传的每个文件 & 文件大小
+    total_size = 0
+    file_list = json.loads(request.body.decode('utf-8'))
+    # 单文件容量限制
+    for item in file_list:
+        # 文件的字节大小 item['size'] =B
+        # 超出限制 单文件限制的大小为 5M
+        if item['size'] > request.tracer.price_policy.per_file_size * 1024 * 1024:  # M 转化为 B
+            return JsonResponse({'status': False,
+                                 'error': '单文件超出限制（最大{}M），文件：{}'.format(request.tracer.price_policy.per_file_size,
+                                                                        item['size'])})
+        total_size += item['size']
+
+    # 总容量限制
+    # request.tracer.price_policy.project_space  # 项目允许的空间
+    # request.tracer.project.use_space  # 项目已使用空间
+    if request.tracer.project.use_space + total_size > request.tracer.price_policy.project_space * 1024 * 1024 * 1024:
+        return JsonResponse({'status': False, 'error': '容量超过最大限制，请购买套餐'})
+    # 同时做容量限制： 单文件大小&总容量
+    data_dict = Credential(request.tracer.project.bucket, request.tracer.project.region)  # 临时凭证
+    return JsonResponse({'status': True, 'data': data_dict})
+
+
+@csrf_exempt
+def FilePost(request, project_id):
+    '''已上传文件写入数据库'''
+    '''
+    name:fileName, 
+    key:key,
+    file_size:fileSize,
+    parent:CURRENT_FOLDER_ID,
+    # etag:data.ETag,
+    file_path:data.Location,
+    '''
+    # 根据key再去cos获取文件Etag
+    print(request.POST)
+    form = FileModalForm(request,data=request.POST)
+    if form.is_valid():
+        # 校验通过：数据写入数据库
+        # form.instance.file_type = 1
+        # form.instance.update_user = request.tracer.user
+        # 通过ModelForm.save存储到数据库中的数据返回的instance对象，无法通过get_xx_display获取choice的中文
+        # form.save()
+        data_dict= form.cleaned_data
+        data_dict.pop('etag')
+        data_dict.update({'Project':request.tracer.project,'file_type':1,'update_user':request.tracer.user})
+        instance = models.File.objects.create(**data_dict)
+
+        # 项目已使用空间：更新
+        request.tracer.project.use_space += instance.file_size
+        request.tracer.project.save()
+        result= {
+            'name':instance.name,
+            #'file_type':instance.get_file_type_display(),
+            'file_size':instance.file_size,
+            'update_user':instance.update_user.username,
+            'update_datetime':instance.update_datetime,
+        }
+        return JsonResponse({'status':True,'data':result})
+
+    return JsonResponse({'status':False,'data':'文件错误'})

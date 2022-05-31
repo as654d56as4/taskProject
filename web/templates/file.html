@@ -29,6 +29,13 @@
             left: -2px;
             overflow: hidden;
         }
+
+        .upload-progress {
+            position: fixed;
+            right: 2px;
+            bottom: 2px;
+            width: 400px;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -60,19 +67,34 @@
                         <i class="fa fa-plus-circle" aria-hidden="true"></i> 新建文件夹
                     </a>
                 </div>
+                <div id="uploadProgress" class="upload-progress hide">
+                    <div class="panel panel-primary">
+                        <div class="panel-heading">
+                            <h3 class="panel-title"><i class="fa fa-cloud-upload" aria-hidden="true"></i> 上传进度</h3>
+                        </div>
+                        <table class="table">
+                            <tbody id="progressList">
+
+                            </tbody>
+
+                        </table>
+                    </div>
+
+                </div>
             </div>
+
             <!-- Table -->
             <table class="table">
                 <thead>
                 <tr>
                     <th>名称</th>
                     <th>文件大小</th>
-                    <th>更新着</th>
+                    <th>更新者</th>
                     <th>更新时间</th>
                     <th>操作</th>
                 </tr>
                 </thead>
-                <tbody>
+                <tbody id="TPl">
                 {% for item in file_object_list %}
                     <tr>
                         {% if item.file_type == 2 %}
@@ -172,6 +194,40 @@
             </div>
         </div>
     </div>
+    <div class="hide">
+                    <table id="progressTemplate">
+                        <tr>
+                            <td>
+                                <div class="name"></div>
+                                <div class="progress">
+                                    <div class="progress-bar progress-bar-striped progress-bar-success"
+                                         role="progressbar" aria-valuenow="0"
+                                         aria-valuemin="0"
+                                         aria-valuemax="100" style="width: 0;">
+                                        0%
+                                    </div>
+                                </div>
+                                <div class="progress_error"></div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+    <div class="hide">
+        <table id="rowTpl">
+            <tr>
+                <td>
+                    <i class="fa fa-file" aria-hidden="true"></i>
+                    <span class="name"></span>
+                </td>
+                <td class="file_size"></td>
+                <td class="update_user"></td>
+                <td class="update_datetime"></td>
+                <td>
+
+                </td>
+            </tr>
+        </table>
+    </div>
 {% endblock %}
 
 {% block js %}
@@ -180,27 +236,8 @@
         var FILEURL = '{% url 'file' project_id=request.tracer.project.id %}';
         var FILE_DELETE_URL = '{% url 'FileDelete' project_id=request.tracer.project.id %}';
         var COS_CREDENTIAL = '{% url 'CosCredential' project_id=request.tracer.project.id %}';
-
-        var COS_OBJECT = new COS({
-            getAuthorization: function (options, callback) {
-                // 想django后台发送请求，获取临时凭证
-                // $.ajax({type:"GET"})
-                $.get(COS_CREDENTIAL, {
-                    // 可从 options 取需要的参数
-                }, function (data) {
-                    var credentials = data && data.credentials;
-                    if (!data || !credentials) return console.error('credentials invalid');
-                    callback({
-                        TmpSecretId: credentials.tmpSecretId,
-                        TmpSecretKey: credentials.tmpSecretKey,
-                        XCosSecurityToken: credentials.sessionToken,
-                        StartTime: data.startTime,
-                        ExpiredTime: data.expiredTime,
-                    });
-                });
-            }
-        });
-
+        var FILEPOST = '{% url 'FilePost' project_id=request.tracer.project.id %}';
+        var CURRENT_FOLDER_ID = '{{ folder_object.id }}';
         $(function () {
             initAddModal();
             bindModelSubmit();
@@ -211,24 +248,92 @@
         function bindUploadFile() {
             //获取临时凭证，(刷新页面时获取一次，五分钟有效)
             $('#uploadFile').change(function () {
-                var fileList = $(this)[0].files; //拿到上传的文件名
+                $('#progressList').empty(); //empty():清空当前标签里的内容
+                var fileList = $(this)[0].files; //拿到上传的文件
+                var checkFileList = [];
                 $.each(fileList, function (index, fileObject) {
-                    // 上传文件
+                    checkFileList.push({'name': fileObject.name, 'size': fileObject.size})
+                });
+                // 把这些数据发送到django后台；Django后台进行容量校验，如果没问题返回临时凭证，否则返回错误信息；
+                var cos_credentials = new COS({
+                    getAuthorization: function (options, callback) {
+                        $.post(COS_CREDENTIAL, JSON.stringify(checkFileList), function (res) {
+                            console.log(res);
+                            if (res.status) {
+                                var credentials = res.data && res.data.credentials;
+                                if (!res.data || !credentials) return console.error('credentials invalid');
+                                callback({
+                                    TmpSecretId: credentials.tmpSecretId,
+                                    TmpSecretKey: credentials.tmpSecretKey,
+                                    XCosSecurityToken: credentials.sessionToken,
+                                    StartTime: res.data.startTime,
+                                    ExpiredTime: res.data.expiredTime,
+                                });
+                                $('#uploadProgress').removeClass('hide');
+                            } else {
+                                alert(res.error)
+                            }
+                        });
+                    }
+                });
+                //上传文件（ 上传之前先获取临时凭证
+                $.each(fileList, function (index, fileObject) {
                     var fileName = fileObject.name;
-                    // 上传文件（异步）
-                    COS_OBJECT.putObject({
-                        Bucket: '{{ request.tracer.project.bucket }}', /* 填入您自己的存储桶，必须字段 */
-                        Region: '{{ request.tracer.project.region }}',  /* 存储桶所在地域，例如ap-beijing，必须字段 */
-                        Key: fileName,  /* 存储在桶里的对象键（例如1.jpg，a/b/test.txt），必须字段 */
-                        StorageClass: 'STANDARD',
+                    var fileSize = fileObject.size;
+                    var key = (new Date()).getTime() + "_" + fileName;
+                    var tr = $("#progressTemplate").find('tr').clone(); // clone():克隆一份;  find('string'):找当前元素下面的标签
+                    var key = (new Date()).getTime() + '_' + fileName; // (new Date()).getTime():获取当前时间戳的前端代码
+                    tr.find('.name').text(fileName); // text() 修改当前标签的文本;
+                    $('#progressList').append(tr); // append() 添加内容到当前标签中;
+                    // 上传文件
+                    cos_credentials.putObject({
+                        Bucket: '{{ request.tracer.project.bucket }}', /* 必须 */
+                        Region: '{{ request.tracer.project.region }}',     /* 存储桶所在地域，必须字段 */
+                        Key: key,              /* 必须 */
                         Body: fileObject, // 上传文件对象
                         onProgress: function (progressData) {
-                            console.log(JSON.stringify(progressData));
+                            // 进度条
+                            var percent = progressData.percent * 100 + '%';
+                            $('.progress-bar').text(percent);
+                            $('.progress-bar').css('width', percent);
+
                         }
                     }, function (err, data) {
-                        console.log(err || data);
+                        // 是否上传cos成功？
+                        if (data && data.statusCode === 200) {
+                            // 上传成功，将文件提交到后台，并写入数据库
+                            // 当前文件上传成功
+                            $.ajax({
+                                url:FILEPOST,
+                                type:'post',
+                                data: {name:fileName,
+                                    key:key,
+                                    file_size:fileSize,
+                                    parent:CURRENT_FOLDER_ID,
+                                    etag:data.ETag,
+                                    file_path:data.Location,
+                                },
+                                success:function (res) {
+                                    // 在数据库中写入成功，将已添加的数据在页面上动态展示出来
+                                    var Tr = $('#rowTpl').find('tr').clone(); //克隆 tr模板
+                                    Tr.find('.name').text(res.data.name);
+                                    Tr.find('.file_size').text(res.data.file_size);
+                                    Tr.find('.update_user').text(res.data.update_user);
+                                    Tr.find('.update_datetime').text(res.data.update_datetime);
+
+                                    $('#TPl').append(Tr);
+                                    tr.remove();
+
+
+                                }
+                            });
+                        } else {
+                            tr.find('.progress_error').text('上传失败')
+
+                        }
+                        // 把上传成功的文件信息提交给django，django写入数据库。
                     });
-                })
+                });
             });
         }
 

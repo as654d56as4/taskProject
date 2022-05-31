@@ -55,7 +55,14 @@ def delete_file(bucket, region, key):
         Bucket=bucket,  # COS桶名称
         Key=key,  # 上传到桶之后的文件名
     )
-
+def check_file(bucket, region, key):
+    config = CosConfig(Region=region, SecretId=settings.TENCENT_COS_ID, SecretKey=settings.TENCENT_COS_KEY)
+    client = CosS3Client(config)
+    data=client.head_object(  # head_object 查看cos数据
+        Bucket=bucket,  # COS桶名称
+        Key=key,  # 上传到桶之后的文件名
+    )
+    return data
 
 def delete_file_list(bucket, region, key_list):
     config = CosConfig(Region=region, SecretId=settings.TENCENT_COS_ID, SecretKey=settings.TENCENT_COS_KEY)
