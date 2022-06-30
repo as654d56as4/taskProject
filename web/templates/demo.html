@@ -1,0 +1,144 @@
+{% extends 'layout/manage.html' %}
+{% load static %}
+{% block css %}
+    <link rel="stylesheet" href="{% static 'plugin/editor-md/css/editormd.min.css' %}"> <!-- markdown编辑器导入css-->
+    <style>
+        .title_list {
+            min-height: 500px;
+            border-right: 1px solid #dddddd;
+        }
+
+        .title_list ul {
+            padding-left: 15px;
+        }
+
+        .title_list ul a {
+            padding: 5px;
+            display: block;
+        }
+
+        .content {
+            min-height: 600px;
+            border-left: 1px solid #dddddd;
+            margin-left: -1px;
+        }
+
+        .panel-heading {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+
+        <!--
+        全屏样式 .editormd-fullscreen {
+            z-index: 1001;
+        }
+
+        -->
+        #这三行样式可以将两个div放在同一行展示
+    </style>
+{% endblock %}
+{% block content %}
+    <div class="container-fluid"><!--在bootstarp中 container-fluid可以将div往中间缩进一点 使页面更加美观 -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div>
+                    <i class="fa fa-book" aria-hidden="true"></i>Wiki文档
+                </div>
+                <div class="function"><!-- btn-xs 可以将按钮变小-->
+                    <a href="{% url 'demo' project_id=request.tracer.project.id %}" type="button"
+                       class="btn btn-success btn-xs"><i class="fa fa-plus-square-o" aria-hidden="true"></i>新建</a>
+                </div>
+            </div>
+            <div class="panel-body" style="padding: 0">
+                <div class="col-sm-3 title_list">
+                    <ul id="catalog">
+                        <!--Ajax自动生成-->
+                    </ul>
+                </div>
+                <div class="col-sm-9 content">
+                    <form method="post">
+                        {% csrf_token %}
+                        {% for field in form %}
+                            {% if field.name == 'content' %}
+                                <div class="form-group">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    <div id="editor">
+                                        {{ field }}
+                                    </div>
+                                    <span class="error-msg">{{ field.errors.0 }}</span>
+                                </div>
+                            {% else %}
+                                <div class="form-group">
+                                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                    {{ field }}
+                                    <span class="error-msg">{{ field.errors.0 }}</span>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        <button type="submit" class="btn btn-primary">提交</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block js %}
+    <script src="{% static 'plugin/editor-md/editormd.min.js' %}"></script>
+
+    <script>
+        var WIKI_DETAIL_URL = "{% url 'wiki' project_id=request.tracer.project.id %}";
+        var WIKI_UPLOAD_URL = "{% url 'upload' project_id=request.tracer.project.id %}";
+        $(function () {
+            initcatalog();
+            initeditormd();
+        });
+
+        /*
+        初始化markdown编辑器（textarea转化为编辑器） editormd函数需要两个参数（’需要修改的内容id‘，{填写css属性}）
+         */
+        function initeditormd() {
+            editormd('editor', {
+                placeholder: '请输入内容',
+                height: 500,
+                path: "{% static 'plugin/editor-md/lib/' %}",
+                imageUpload:true,<!-- imageUpload 用来增加本地上传功能-->
+                imageFormats:['jpg','jpeg','png','gif'],<!-- imageFormats 指定可以上传的图片格式，后缀名-->
+                imageUploadURL:WIKI_UPLOAD_URL ,<!-- 图片上传地址-->
+            })
+        }
+
+        function initcatalog() {
+            //Ajax展示目录，
+
+            $.ajax({
+                url: "{% url 'catalog' project_id=request.tracer.project.id %}",
+                type: 'GET',
+                dataType: 'JSON',
+                success: function (res) {
+                    if (res.status) {
+                        $.each(res.data, function (index, item) {//$.each表示循环
+                            //item={'id': 1, 'title': 'asd', 'parent_id': None},
+                            //     {'id': 2, 'title': '蔡家豪', 'parent_id': None},
+                            //     {'id': 3, 'title': 'crm', 'parent_id': 2}
+                            var href = WIKI_DETAIL_URL + '?wiki_id=' + item.id;
+                            var li = $('<li>').attr('id', 'id_' + item.id).append($('<a>').text(item.title).attr('href', href)).append($('<ul>'));
+                            // $('<li>')表示新建一个li标签，attr则是在当前li标签中添加一个id属性并赋值，
+                            // append在当前标签之后继续添加，text标签内部填写的内容
+                            if (!item.parent_id) {//如果parent_id为空的话就在当前ul中直接添加一级目录
+                                //<li id='id_1'><a>目录</a></li>
+                                //添加到 catalog中
+                                $('#catalog').append(li);
+                            } else {//parent_id不为空，先找到二级目录对应的一级目录，并在下面的子标签中添加二级目录
+                                $('#id_' + item.parent_id).children('ul').append(li); //children('里面填写当前标签下要用的子标签')
+                            }
+                        })
+                    } else {
+                        alert('初始化目录失败');
+                    }
+                }
+            })
+        }
+    </script>
+{% endblock %}

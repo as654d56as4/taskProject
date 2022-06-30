@@ -1,0 +1,149 @@
+{% extends 'layout/manage.html' %}
+{% load static %}
+{% block css %}
+    <link rel="stylesheet" href="{% static 'plugin/editor-md/css/editormd.preview.min.css' %}">
+    <style>
+        .title_list {
+            min-height: 500px;
+            border-right: 1px solid #dddddd;
+        }
+
+        .title_list ul {
+            padding-left: 15px;
+        }
+
+        .title_list ul a {
+            padding: 5px;
+            display: block;
+        }
+
+        .content {
+            min-height: 600px;
+            border-left: 1px solid #dddddd;
+            margin-left: -1px;
+        }
+
+        .panel-heading {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+        }
+
+        #这三行样式可以将两个div放在同一行展示
+    </style>
+{% endblock %}
+{% block content %}
+    <div class="container-fluid"><!--在bootstarp中 container-fluid可以将div往中间缩进一点 使页面更加美观 -->
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <div>
+                    <i class="fa fa-book" aria-hidden="true"></i>Wiki文档
+                </div>
+                <div class="function" style="margin-left: -200px"><!-- btn-xs 可以将按钮变小-->
+                    <a href="{% url 'demo' project_id=request.tracer.project.id %}" type="button"
+                       class="btn btn-success btn-xs"><i class="fa fa-plus-square-o" aria-hidden="true"></i> 新建</a>
+                </div>
+                {% if wiki_object %}
+                    <div class="function" style="margin-left: -1000px"><!-- btn-xs 可以将按钮变小-->
+                        <a href="{% url 'edit' project_id=request.tracer.project.id wiki_id=wiki_object.id %}" type="button"
+                           class="btn btn-primary btn-xs"><i class="fa fa-edit" aria-hidden="true"></i> 编辑</a>
+                    </div>
+                    <div class="function" data-toggle="modal" data-target="#addModal" style="margin-left: -1000px">
+                        <!-- btn-xs 可以将按钮变小-->
+                        <a type="button" class="btn btn-danger btn-xs"><i class="fa fa-trash" aria-hidden="true"></i> 删除</a>
+                    </div>
+                    <!-- Modal 模态框-->
+                    <div class="modal fade" id="addModal" tabindex="-1" role="dialog">
+                        <div class="modal-dialog" role="document">
+                            <div class="modal-content">
+                                <div class="modal-footer">
+                                    <a href="{% url 'delete' project_id=request.tracer.project.id wiki_id=wiki_object.id %}" type="button" class="btn btn-default" style="display: block;margin:auto">确定</a>
+                                    <p></p>
+                                    <a href="{% url 'wiki' project_id=request.tracer.project.id %}" type="button" class="btn btn-default" style="display: block;margin:auto;">取消</a>
+                                </div>
+                            </div><!-- /.modal-content -->
+                        </div><!-- /.modal-dialog -->
+                    </div><!-- /.modal -->
+                {% endif %}
+            </div>
+            <div class="panel-body" style="padding: 0">
+                <div class="col-sm-3 title_list">
+                    <ul id="catalog">
+                        <!--Ajax自动生成-->
+                    </ul>
+
+                </div>
+                <div class="col-sm-9 content">
+                    {% if wiki_object %}
+                        <h1 style="text-align: center;">{{ wiki_object.title }}</h1>
+                        <hr>
+                        <div id="previewMarkdown">
+                            <textarea>{{ wiki_object.content }}</textarea>
+
+                        </div>
+                    {% else %}
+                        <div style="text-align: center;margin-top: 50px">
+                        <h4>《{{ request.tracer.project.name }}》Wiki文档库</h4>
+                        <a href="{% url 'demo' project_id=request.tracer.project.id %}">
+                            <i class="fa fa-plus-square-o" aria-hidden="true"></i> 新建文章</a>
+                    {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block js %}
+    <script src="{% static 'plugin/editor-md/editormd.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/jquery.flowchart.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/flowchart.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/marked.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/prettify.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/raphael.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/sequence-diagram.min.js' %}"></script>
+    <script src="{% static 'plugin/editor-md/lib/underscore.min.js' %}"></script>
+    <script>
+        var WIKI_DETAIL_URL = "{% url 'wiki' project_id=request.tracer.project.id %}";
+        $(function () {
+            initcatalog();
+            initPreviewMarkdown();
+        });
+        function initPreviewMarkdown() {
+            editormd.markdownToHTML('previewMarkdown',{
+                htmlDecode:"style,script,iframe", <!-- htmlDecode:"style,script,iframe"，内容中有 "style,script,iframe"的话就忽略掉-->
+            })
+        }
+        function initcatalog() {
+            //Ajax展示目录，
+
+            $.ajax({
+                url: "{% url 'catalog' project_id=request.tracer.project.id %}",
+                type: 'GET',
+                dataType: 'JSON',
+                success: function (res) {
+                    if (res.status) {
+                        $.each(res.data, function (index, item) {//$.each表示循环
+                            //item={'id': 1, 'title': 'asd', 'parent_id': None},
+                            //     {'id': 2, 'title': '蔡家豪', 'parent_id': None},
+                            //     {'id': 3, 'title': 'crm', 'parent_id': 2}
+                            var href = WIKI_DETAIL_URL + '?wiki_id=' + item.id;
+                            var li = $('<li>').attr('id', 'id_' + item.id).append($('<a>').text(item.title).attr('href', href)).append($('<ul>'));
+                            // $('<li>')表示新建一个li标签，attr则是在当前li标签中添加一个id属性并赋值，
+                            // append在当前标签之后继续添加，text标签内部填写的内容
+                            if (!item.parent_id) {//如果parent_id为空的话就在当前ul中直接添加一级目录
+                                //<li id='id_1'><a>目录</a></li>
+                                //添加到 catalog中
+                                $('#catalog').append(li);
+                            } else {//parent_id不为空，先找到二级目录对应的一级目录，并在下面的子标签中添加二级目录
+                                $('#id_' + item.parent_id).children('ul').append(li); //children('里面填写当前标签下要用的子标签')
+                            }
+                        })
+                    } else {
+                        alert('初始化目录失败');
+                    }
+                }
+            })
+        }
+    </script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "layout/basic.html" %}
+{% load static %}
+{% block title %}
+用户注册
+{% endblock %}
+
+{% block css %}
+    <link rel="stylesheet" href="{% static 'css/account.css' %}">
+    <style>
+    .error-msg{
+        color: red;
+        position: absolute;
+        font-size: 13px;
+    }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <div class="account">
+        <div class="title">用户注册</div>
+        <form id="regForm" method="post" novalidate>
+            {% csrf_token %}
+            {% for field in form %}
+                {% if field.name == 'code' %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <div class="row">
+                            <div class="col-xs-7">
+                                {{ field }}
+                                <span class="error-msg">{{ field.errors.0 }}</span>
+                            </div>
+                            <div class="col-xs-5"></div>
+                            <input id="s" type="button" class="btn btn-default" value="点击获取验证码">
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="form-group">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        <span class="error-msg">{{ field.errors.0 }}</span>
+                    </div>
+                {% endif %}
+            {% endfor %}
+            <div class="row">
+                <div class="col-xs-3">
+                    <input id="btnSubmit" type="button" class="btn btn-primary" value="注册">
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+
+{% block js %}
+    <script>
+        $(function () {
+            bindclickbtnsubmit();
+        });
+
+        function bindclickbtnsubmit() {
+            $('#btnSubmit').click(function () {
+                /*获取当前属性错误信息*/
+                $('.error-msg').empty();
+                $.ajax({
+                    url: "{% url 'register' %}",/*反向解析地址*/
+                    /*提交方式*/
+                    type: "post",
+                    /*获取id为regform下属性的所有值*/
+                    data: $('#regForm').serialize(),
+                    dataType: "json",
+                    /*res 接收视图函数传回来的json串*/
+                    success: function (res) {
+                        // ajax发送成功之后，自动执行的函数
+                        if (res.status) {/*判断视图函数传递回来的status是否为True*/
+                            location.href = res.data;/*location.href表示跳转，res.data表示跳转的地址*/
+                        } else {
+                            $.each(res.error, function (key, value) {/*报错信息*/
+                                $('#id_' + key).next().text(value[0]);
+                            })
+                        }
+                    }
+                })
+            })
+        }
+    </script>
+{% endblock %}
+
+
+
+
+
+
+
+
+<!--
+<script>
+
+    $(function () {
+
+    });
+    function sss() {
+        var phone = $('#id_phone').val();
+        $.ajax({
+            url:"",
+            type: 'get',
+            data: "",
+            dataType:'json',
+            success:function (res) {
+                console.log(res)
+
+            }
+
+        })
+    }
+</script>-->
